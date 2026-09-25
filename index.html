@@ -30,7 +30,7 @@ SOFTWARE.
 <section class="panel"><div class="toolbar between"><h2><span class="step">1</span> Choose your TBT</h2><button id="newDay" class="small">New daily TBT</button></div>
 <div class="grid"><label>TBT template<select id="permit"><option value="hia72">0-HIA#143972 HIA</option><option value="hia73">0-HIA#143973 HIA</option><option value="dia">0-DIA#143919 DIA</option></select></label><label>Date and time (24-hour in PDF)<input id="date" type="datetime-local" required></label></div>
 <div id="permitNumber" class="permit"></div><p class="hint">Each selection uses its original permit number and QR code.</p>
-<label style="margin-top:16px">Toolbox message<input id="message" list="messageList" maxlength="140" placeholder="Select a saved message or type your own"></label><datalist id="messageList"></datalist><button id="saveMessage" class="small" style="margin-top:8px">Save message to list</button>
+<label style="margin-top:16px">Saved toolbox messages<select id="messagePicker" aria-label="All toolbox messages"></select></label><label style="margin-top:8px">Toolbox message<input id="message" maxlength="140" placeholder="Select a saved message or type your own"></label><datalist id="messageList"></datalist><button id="saveMessage" class="small" style="margin-top:8px">Save message to list</button>
 </section>
 <section class="panel"><div class="toolbar between"><h2><span class="step">2</span> Select today’s tasks</h2><span id="taskCount" class="summary-count"></span></div>
 <p class="muted">Review the hazards and controls for today’s work. Expand a task to edit it and change the default Controls in place: Yes if needed.</p><div class="toolbar"><button id="selectAll" class="small">Select all</button><button id="clearTasks" class="small">Clear selection</button></div><div id="tasks"></div><div class="toolbar" style="margin:12px 0"><button id="taskPrev">Previous</button><span id="taskPageLabel" aria-live="polite"></span><button id="taskNext">Next</button></div><button id="addTask">+ Add custom task</button>
@@ -318,7 +318,10 @@ try{const old=localStorage.getItem(STORE);if(old)db=checkBackup(JSON.parse(old))
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(db));}catch(e){notice('Browser storage is unavailable or full. Export a backup to keep your work.','error');}}
 function changed(){revision++;$('previewStatus').textContent=pdfUrl?'Changes made — update preview to refresh.':'Select tasks, then update the preview.';clearTimeout(saveTimer);saveTimer=setTimeout(persist,200);counts();if(activeValidation!==null)showFieldErrors(validationIssues(snapshot(),activeValidation));}
 function counts(){$('generatedCount').textContent=db.stats.generated;$('downloadCount').textContent=db.stats.downloads;$('taskCount').textContent=db.draft.selected.length+' selected';$('peopleCount').textContent='('+db.draft.people.length+'/19)';$('permitNumber').textContent='Permit '+PERMITS[db.draft.permit].number;}
-function renderLists(){for(const [id,items] of [['messageList',db.messages],['peopleList',db.people]]){$(id).replaceChildren(...items.map(text=>{const o=document.createElement('option');o.value=text;return o;}));}}
+function renderMessagePicker(){const prompt=document.createElement("option");prompt.value="";prompt.textContent="Choose from all saved messages";$("messagePicker").replaceChildren(prompt,...db.messages.map(text=>{const o=document.createElement("option");o.value=text;o.textContent=text;return o;}));$("messagePicker").value=db.messages.includes(db.draft.message)?db.draft.message:"";}
+$("messagePicker").addEventListener("change",()=>{const message=$("messagePicker").value;if(!message)return;$("message").value=db.draft.message=message;changed();});
+$("message").addEventListener("input",()=>{$("messagePicker").value=db.messages.includes($("message").value)?$("message").value:"";});
+function renderLists(){renderMessagePicker();for(const [id,items] of [['messageList',db.messages],['peopleList',db.people]]){$(id).replaceChildren(...items.map(text=>{const o=document.createElement('option');o.value=text;return o;}));}}
 function renderPeople(){ $('people').replaceChildren(...db.people.map(name=>{
  const card=document.createElement('div');card.className='person';
  const label=document.createElement('label'),cb=document.createElement('input');cb.type='checkbox';cb.checked=db.draft.people.includes(name);
@@ -397,6 +400,7 @@ $('restore').onclick=()=>$('fileImport').click();$('fileImport').onchange=async(
 for(const key of ['date','message','conductor','notes','action','people','tasks','personName']){bindField(key,$(key));if(['people','tasks'].includes(key))$(key).setAttribute('tabindex','-1');}
 render();
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'read_tbt_draft',description:'Read the current TBT fields, selected tasks and controls. Does not generate or download a PDF.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>snapshot()})).catch(()=>{});}catch(e){}}
+
 
 </script>
 <script type="module" onerror="globalThis.tbtPdfReadyReject(new Error('PDF preview renderer could not load.'))">/**
@@ -772,4 +776,5 @@ DEALINGS IN THE FONT SOFTWARE.
 
 -->
 </body></html>
+
 
