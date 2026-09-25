@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --></head><body>
-<header><div><h1>TBT Generator</h1><p>HIA &amp; DIA · Toolbox talk records</p></div><span class="badge">Offline · Saved on this device</span></header>
+<header><div><h1>TBT Generator</h1><p>HIA &amp; DIA · Toolbox talk records</p></div><span class="badge">Offline · Saved on this device</span></header><div class="panel" style="max-width:1432px;margin:16px auto"><strong>PDFs generated: <span id="generatedCount">0</span> &nbsp; · &nbsp; Download requests: <span id="downloadCount">0</span></strong><p class="hint">This browser/device only, from this update onward. Generated includes preview and download generation. Downloads count save requests; the browser cannot confirm files were saved. Earlier activity is unavailable. Counts are included in backups.</p></div>
 <main class="layout"><div>
 <div id="notice" class="notice" role="status" aria-live="polite"></div>
 <section class="panel"><div class="toolbar between"><h2><span class="step">1</span> Choose your TBT</h2><button id="newDay" class="small">New daily TBT</button></div>
@@ -33,7 +33,7 @@ SOFTWARE.
 <label style="margin-top:16px">Toolbox message<input id="message" list="messageList" maxlength="140" placeholder="Select a saved message or type your own"></label><datalist id="messageList"></datalist><button id="saveMessage" class="small" style="margin-top:8px">Save message to list</button>
 </section>
 <section class="panel"><div class="toolbar between"><h2><span class="step">2</span> Select today’s tasks</h2><span id="taskCount" class="summary-count"></span></div>
-<p class="muted">Review the hazards and controls for today’s work. Expand a task to edit it and change the default Controls in place: Yes if needed.</p><div class="toolbar"><button id="selectAll" class="small">Select all</button><button id="clearTasks" class="small">Clear selection</button></div><div id="tasks"></div><button id="addTask">+ Add custom task</button>
+<p class="muted">Review the hazards and controls for today’s work. Expand a task to edit it and change the default Controls in place: Yes if needed.</p><div class="toolbar"><button id="selectAll" class="small">Select all</button><button id="clearTasks" class="small">Clear selection</button></div><div id="tasks"></div><div class="toolbar" style="margin:12px 0"><button id="taskPrev">Previous</button><span id="taskPageLabel" aria-live="polite"></span><button id="taskNext">Next</button></div><button id="addTask">+ Add custom task</button>
 </section>
 <section class="panel"><h2><span class="step">3</span> People and observations</h2><label>Toolbox conducted by<input id="conductor" list="peopleList" maxlength="65" placeholder="Select or enter conductor’s name"></label><datalist id="peopleList"></datalist>
 <div class="toolbar between" style="margin-top:16px"><label>Attendees <span id="peopleCount" class="muted"></span></label><button id="clearPeople" class="small">Clear attendees</button></div><div id="people" class="people"></div><div class="inline-add"><input id="personName" aria-label="New attendee name" maxlength="65" placeholder="Enter a new name"><button id="addPerson">Add attendee</button></div><p class="hint">Up to 19 attendees. Add the conductor here too if they will sign. Enter initials or choose Add signature to upload a PNG/JPG. Signatures are saved for reuse; an uploaded image takes priority over initials.</p>
@@ -91,7 +91,8 @@ const INITIAL_TASKS=[
 ['heat-work','Plan outdoor work in heat','Heat exposure and dehydration may cause fatigue, heat illness or loss of concentration.','Follow MATAR heat-stress plan and current work restrictions; monitor conditions; provide cool water, shade, breaks and rotation; use buddy checks.','Supervisor, all workers'],
 ['handover','Final inspection and operational handover','Unreported defects, unsecured covers or premature reopening may cause equipment damage or unsafe operation.','Confirm covers and fixings secure; account for tools and waste; report outstanding defects; coordinate handover with Airside Safety and AOCC before area release.','Permit holder, supervisor']
 ].map(([id,title,hazards,controls,responsibility])=>({id,title,hazards,controls,responsibility}));
-const INITIAL_PEOPLE=['Bibin KJ','Jaseel M','Khan Mohammed','Kamal Noor','Idrees','Ali','Dhan'];
+const INITIAL_SIGNATURES={"Jaseel M": "JM", "Ali Rusdi": "AR", "Dhan Bahadhur": "DB", "Ajith Vavachan": "AV", "Lordson Vijay": "LV", "Khem Rana": "KR", "Shakeel Khan": "SK", "Nishar Vamanjoor": "NV", "Reggie Paderna": "RP", "Birendra Neupane": "BN", "Frederick Rosette": "FR", "Faruk Hossain": "FH", "Mohammed Ibrahim": "IB", "Bibin Kooran": "BK", "Khan Mohammed": "KM", "Kamal Noor": "KN"};
+const INITIAL_PEOPLE=Object.keys(INITIAL_SIGNATURES);
 const INITIAL_MESSAGES=[
  "Drink more water. Take regular rest breaks.",
  "Wear high-visibility vests at all times.",
@@ -245,7 +246,8 @@ async function renderPdfPreview(bytes,container){
 <script>const $=id=>document.getElementById(id),STORE='vdgs-tbt-v1';
 const nowLocal=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
 const fresh=()=>({permit:'hia72',date:nowLocal(),message:'',selected:[],statuses:{},conductor:'',people:[],notes:'',action:'no'});
-const initial=()=>({version:1,tasks:structuredClone(INITIAL_TASKS),people:[...INITIAL_PEOPLE],messages:[...INITIAL_MESSAGES],signatures:{'Jaseel M':'JM'},signatureImages:{},draft:fresh(),previous:null});
+const initial=()=>({version:1,peopleRevision:1,tasks:structuredClone(INITIAL_TASKS),people:[...INITIAL_PEOPLE],messages:[...INITIAL_MESSAGES],signatures:{...INITIAL_SIGNATURES},stats:{generated:0,downloads:0},signatureImages:{},draft:fresh(),previous:null});
+let taskPage=0;const TASK_PAGE_SIZE=5;
 let db=initial(),pdfUrl=null,revision=0,previewRevision=-1,saveTimer;
 function notice(text,type=''){const el=$('notice');el.textContent=text;el.className='notice '+type;}
 const fieldTargets=new Map();let activeValidation=null;
@@ -258,7 +260,7 @@ function bindField(key,input){
 function showFieldErrors(issues,focus=false){
  for(const {input,error} of fieldTargets.values()){error.textContent='';input.removeAttribute('aria-invalid');}
  for(const issue of issues){const target=fieldTargets.get(issue.key);if(!target)continue;target.error.textContent=issue.message;target.input.setAttribute('aria-invalid','true');const details=target.input.closest('details');if(details)details.open=true;}
- if(focus&&issues.length){const target=fieldTargets.get(issues[0].key);if(target){target.input.scrollIntoView({behavior:'smooth',block:'center'});target.input.focus({preventScroll:true});}}
+ if(focus&&issues.length){if(issues[0].key.startsWith('task:')){taskPage=Math.floor(db.tasks.findIndex(t=>issues[0].key.startsWith('task:'+t.id+':'))/TASK_PAGE_SIZE);showTaskPage();}const target=fieldTargets.get(issues[0].key);if(target){target.input.scrollIntoView({behavior:'smooth',block:'center'});target.input.focus({preventScroll:true});}}
 }
 function oneFieldError(key,message){showFieldErrors([{key,message}],true);}
 function checkBackup(v){
@@ -278,12 +280,24 @@ function checkBackup(v){
  if(!v.signatureImages||typeof v.signatureImages!=='object'||Array.isArray(v.signatureImages)||!Object.entries(v.signatureImages).every(([name,value])=>str(name,65)&&str(value,350000)&&/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value)))fail();
  if(!v.draft.action)v.draft.action="no";
  for(const id of Object.keys(v.draft.statuses)){if(!v.draft.statuses[id])v.draft.statuses[id]="yes";}
+ if(v.peopleRevision!==1){
+  const aliases={'Ali':'Ali Rusdi','Dhan':'Dhan Bahadhur','Bibin KJ':'Bibin Kooran'};
+  for(const [old,name] of Object.entries(aliases)){
+   if(v.signatureImages[old]&&!v.signatureImages[name])v.signatureImages[name]=v.signatureImages[old];
+   v.draft.people=v.draft.people.map(n=>n===old?name:n);
+   if(v.draft.conductor===old)v.draft.conductor=name;
+  }
+  v.people=[...new Set([...INITIAL_PEOPLE,...v.people.filter(n=>!aliases[n])])];
+  v.signatures={...v.signatures,...INITIAL_SIGNATURES};v.peopleRevision=1;
+ }
+ if(v.stats===undefined)v.stats={generated:0,downloads:0};
+ if(!v.stats||!['generated','downloads'].every(k=>Number.isSafeInteger(v.stats[k])&&v.stats[k]>=0))fail();
  return v;
 }
 try{const old=localStorage.getItem(STORE);if(old)db=checkBackup(JSON.parse(old));}catch(e){notice('Saved data could not be loaded. You can continue and import a backup.');}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(db));}catch(e){notice('Browser storage is unavailable or full. Export a backup to keep your work.','error');}}
 function changed(){revision++;$('previewStatus').textContent=pdfUrl?'Changes made — update preview to refresh.':'Select tasks, then update the preview.';clearTimeout(saveTimer);saveTimer=setTimeout(persist,200);counts();if(activeValidation!==null)showFieldErrors(validationIssues(snapshot(),activeValidation));}
-function counts(){$('taskCount').textContent=db.draft.selected.length+' selected';$('peopleCount').textContent='('+db.draft.people.length+'/19)';$('permitNumber').textContent='Permit '+PERMITS[db.draft.permit].number;}
+function counts(){$('generatedCount').textContent=db.stats.generated;$('downloadCount').textContent=db.stats.downloads;$('taskCount').textContent=db.draft.selected.length+' selected';$('peopleCount').textContent='('+db.draft.people.length+'/19)';$('permitNumber').textContent='Permit '+PERMITS[db.draft.permit].number;}
 function renderLists(){for(const [id,items] of [['messageList',db.messages],['peopleList',db.people]]){$(id).replaceChildren(...items.map(text=>{const o=document.createElement('option');o.value=text;return o;}));}}
 function renderPeople(){ $('people').replaceChildren(...db.people.map(name=>{
  const card=document.createElement('div');card.className='person';
@@ -306,6 +320,14 @@ async function prepareSignature(file){
  try{const scale=Math.min(1,600/bitmap.width,200/bitmap.height),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/png');if(data.length>350000)throw Error('Crop the signature image more closely, then try again.');return data;}finally{bitmap.close();}
 }
 function field(labelText,value,onInput,type='textarea',key){const label=document.createElement('label');label.textContent=labelText;const input=document.createElement(type);input.value=value;input.maxLength=type==='input'?160:2200;input.addEventListener('input',()=>onInput(input.value));label.append(input);if(key)bindField(key,input);return label;}
+function showTaskPage(){
+ taskPage=Math.max(0,Math.min(taskPage,Math.ceil(db.tasks.length/TASK_PAGE_SIZE)-1));
+ Array.from($('tasks').children).forEach((card,i)=>{card.hidden=Math.floor(i/TASK_PAGE_SIZE)!==taskPage;});
+ $('taskPageLabel').textContent='Page '+(taskPage+1)+' of '+Math.ceil(db.tasks.length/TASK_PAGE_SIZE)+' · '+db.tasks.length+' tasks';
+ $('taskPrev').disabled=taskPage===0;$('taskNext').disabled=(taskPage+1)*TASK_PAGE_SIZE>=db.tasks.length;
+}
+$('taskPrev').onclick=()=>{taskPage--;showTaskPage();};
+$('taskNext').onclick=()=>{taskPage++;showTaskPage();};
 function renderTasks(){ $('tasks').replaceChildren(...db.tasks.map(task=>{
  const card=document.createElement('div');card.className='task'+(db.draft.selected.includes(task.id)?' chosen':'');const head=document.createElement('div');head.className='task-head';const label=document.createElement('label'),cb=document.createElement('input'),name=document.createElement('span');cb.type='checkbox';cb.checked=db.draft.selected.includes(task.id);name.textContent=task.title;label.append(cb,name);head.append(label);
  const details=document.createElement('details'),summary=document.createElement('summary'),editor=document.createElement('div');summary.textContent='Hazards, controls and responsibility';editor.className='editor';
@@ -313,13 +335,13 @@ function renderTasks(){ $('tasks').replaceChildren(...db.tasks.map(task=>{
  cb.addEventListener('change',()=>{db.draft.selected=cb.checked?[...db.draft.selected,task.id]:db.draft.selected.filter(x=>x!==task.id);card.classList.toggle('chosen',cb.checked);changed();});
  editor.append(field('Task',task.title,v=>{task.title=v;name.textContent=v;changed();},'input','task:'+task.id+':title'),field('Hazards and consequences',task.hazards,v=>{task.hazards=v;changed();},'textarea','task:'+task.id+':hazards'),field('Controls and mitigation',task.controls,v=>{task.controls=v;changed();},'textarea','task:'+task.id+':controls'));
  const grid=document.createElement('div');grid.className='grid';const statusLabel=document.createElement('label');statusLabel.textContent='Controls in place?';statusLabel.append(select);bindField('task:'+task.id+':status',select);grid.append(field('Responsibility — assign names or roles',task.responsibility,v=>{task.responsibility=v;changed();},'input','task:'+task.id+':responsibility'),statusLabel);editor.append(grid);details.append(summary,editor);card.append(head,details);return card;
- }));counts();}
+ }));showTaskPage();counts();}
 function render(){for(const k of ['permit','date','message','conductor','notes','action'])$(k).value=db.draft[k];renderLists();renderTasks();renderPeople();}
 for(const k of ['permit','date','message','conductor','notes','action'])$(k).addEventListener('input',()=>{db.draft[k]=$(k).value;changed();});
 $('selectAll').onclick=()=>{db.draft.selected=db.tasks.map(t=>t.id);renderTasks();changed();};
 $('clearTasks').onclick=()=>{db.draft.selected=[];renderTasks();changed();};
 $('clearPeople').onclick=()=>{db.draft.people=[];renderPeople();changed();};
-$('addTask').onclick=()=>{const id='custom-'+Date.now();db.tasks.push({id,title:'New task',hazards:'',controls:'',responsibility:''});db.draft.selected.push(id);renderTasks();const last=$('tasks').lastElementChild;last.querySelector('details').open=true;last.querySelector('input:not([type=checkbox])').focus();changed();};
+$('addTask').onclick=()=>{const id='custom-'+Date.now();db.tasks.push({id,title:'New task',hazards:'',controls:'',responsibility:''});db.draft.selected.push(id);taskPage=Math.floor((db.tasks.length-1)/TASK_PAGE_SIZE);renderTasks();const last=$('tasks').lastElementChild;last.querySelector('details').open=true;last.querySelector('input:not([type=checkbox])').focus();changed();};
 function addPerson(){const n=$('personName').value.trim();if(!n){oneFieldError('personName','Enter an attendee name.');return;}if(db.draft.people.length>=19&&!db.draft.people.includes(n)){notice('The form holds up to 19 attendees.','error');return;}const existing=db.people.find(x=>x.toLowerCase()===n.toLowerCase());const actual=existing||n;if(!existing)db.people.push(n);if(!db.draft.people.includes(actual))db.draft.people.push(actual);$('personName').value='';renderPeople();renderLists();changed();}
 $('addPerson').onclick=addPerson;$('personName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addPerson();}});
 $('saveMessage').onclick=()=>{const m=$('message').value.trim();if(!m){oneFieldError('message','Enter a toolbox message first.');return;}if(!db.messages.includes(m))db.messages.push(m);renderLists();persist();notice('Message saved to your list.','success');};
@@ -348,13 +370,14 @@ function validate(s,download){const issues=validationIssues(s,download);if(issue
 
 function pdfFilename(s){const [date,time]=s.date.split('T');const [year,month,day]=date.split('-');return 'TBT '+PERMITS[s.permit].number+' '+day+month+year+' '+time.slice(0,5).replace(':','')+'.pdf';}
 function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-async function makePdf(download){$('previewBtn').disabled=$('downloadBtn').disabled=true;$('previewStatus').textContent='Generating PDF and drawing pages…';try{const rev=revision,s=snapshot();activeValidation=download;showFieldErrors([]);notice('');validate(s,download);const result=await TBTpdf.generate(s);const blob=new Blob([result.bytes],{type:'application/pdf'});if(pdfUrl)URL.revokeObjectURL(pdfUrl);pdfUrl=URL.createObjectURL(blob);let previewError=null;try{await renderPdfPreview(result.bytes,$('pdfPreview'));$('pdfPreview').classList.remove('hidden');$('emptyPreview').classList.add('hidden');}catch(e){previewError=e;$('pdfPreview').classList.add('hidden');$('emptyPreview').classList.remove('hidden');$('emptyPreview').textContent='PDF created, but the preview could not be drawn. You can still download it.';}$('openPdf').href=pdfUrl;$('openPdf').classList.remove('hidden');previewRevision=rev;$('previewStatus').textContent=previewError?'PDF created · Preview unavailable':result.pages+' page'+(result.pages>1?'s':'')+(rev===revision?' · Preview up to date':' · Changes made — update preview');if(download){downloadBlob(blob,pdfFilename(s));if(s.conductor&&!db.people.includes(s.conductor)){db.people.push(s.conductor);renderLists();renderPeople();}db.previous={draft:{...structuredClone(db.draft)},tasks:structuredClone(db.tasks)};persist();notice('PDF downloaded. '+result.pages+' page'+(result.pages>1?'s':'')+'. Saved signatures and entered initials are included.','success');}else if(previewError)notice('PDF created, but preview failed: '+previewError.message+'. Download PDF is still available.','error');else notice('Preview rendered. Review each page before downloading.','success');}catch(e){if(e.fields){$('previewStatus').textContent='Check the highlighted fields.';showFieldErrors(e.fields,true);}else{$('previewStatus').textContent='Preview not updated — check the message above.';notice(e.message||'PDF could not be generated.','error');$('notice').scrollIntoView({behavior:'smooth',block:'center'});}}finally{$('previewBtn').disabled=$('downloadBtn').disabled=false;}}
+async function makePdf(download){$('previewBtn').disabled=$('downloadBtn').disabled=true;$('previewStatus').textContent='Generating PDF and drawing pages…';try{const rev=revision,s=snapshot();activeValidation=download;showFieldErrors([]);notice('');validate(s,download);const result=await TBTpdf.generate(s);db.stats.generated++;counts();persist();const blob=new Blob([result.bytes],{type:'application/pdf'});if(pdfUrl)URL.revokeObjectURL(pdfUrl);pdfUrl=URL.createObjectURL(blob);let previewError=null;try{await renderPdfPreview(result.bytes,$('pdfPreview'));$('pdfPreview').classList.remove('hidden');$('emptyPreview').classList.add('hidden');}catch(e){previewError=e;$('pdfPreview').classList.add('hidden');$('emptyPreview').classList.remove('hidden');$('emptyPreview').textContent='PDF created, but the preview could not be drawn. You can still download it.';}$('openPdf').href=pdfUrl;$('openPdf').classList.remove('hidden');previewRevision=rev;$('previewStatus').textContent=previewError?'PDF created · Preview unavailable':result.pages+' page'+(result.pages>1?'s':'')+(rev===revision?' · Preview up to date':' · Changes made — update preview');if(download){downloadBlob(blob,pdfFilename(s));db.stats.downloads++;counts();persist();if(s.conductor&&!db.people.includes(s.conductor)){db.people.push(s.conductor);renderLists();renderPeople();}db.previous={draft:{...structuredClone(db.draft)},tasks:structuredClone(db.tasks)};persist();notice('PDF downloaded. '+result.pages+' page'+(result.pages>1?'s':'')+'. Saved signatures and entered initials are included.','success');}else if(previewError)notice('PDF created, but preview failed: '+previewError.message+'. Download PDF is still available.','error');else notice('Preview rendered. Review each page before downloading.','success');}catch(e){if(e.fields){$('previewStatus').textContent='Check the highlighted fields.';showFieldErrors(e.fields,true);}else{$('previewStatus').textContent='Preview not updated — check the message above.';notice(e.message||'PDF could not be generated.','error');$('notice').scrollIntoView({behavior:'smooth',block:'center'});}}finally{$('previewBtn').disabled=$('downloadBtn').disabled=false;}}
 $('previewBtn').onclick=()=>makePdf(false);$('downloadBtn').onclick=()=>makePdf(true);
 $('backup').onclick=()=>downloadBlob(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),'TBT-backup-'+new Date().toISOString().slice(0,10)+'.json');
 $('restore').onclick=()=>$('fileImport').click();$('fileImport').onchange=async()=>{const file=$('fileImport').files[0];if(!file)return;try{if(file.size>10000000)throw Error('Backup file is too large.');const imported=checkBackup(JSON.parse(await file.text()));if(!confirm('Replace your saved lists and current TBT with this backup?'))return;db=imported;render();changed();persist();notice('Backup imported.','success');}catch(e){notice(e.message||'Unable to import backup.','error');}finally{$('fileImport').value='';}};
 for(const key of ['date','message','conductor','notes','action','people','tasks','personName']){bindField(key,$(key));if(['people','tasks'].includes(key))$(key).setAttribute('tabindex','-1');}
 render();
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'read_tbt_draft',description:'Read the current TBT fields, selected tasks and controls. Does not generate or download a PDF.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>snapshot()})).catch(()=>{});}catch(e){}}
+
 </script>
 <script type="module" onerror="globalThis.tbtPdfReadyReject(new Error('PDF preview renderer could not load.'))">/**
  * @licstart The following is the entire license notice for the
