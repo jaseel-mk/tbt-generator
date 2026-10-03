@@ -41,3 +41,13 @@ PDF generation was checked for all three permits, all 11 tasks with three attend
 ## Included software
 
 PDF creation uses pdf-lib 1.x (MIT license). The preview uses Mozilla PDF.js with bundled fonts; the libraries and their license notices are embedded in the HTML. The original PDFs and all data stay on the device; no external network services are used.
+
+## Saved permit numbers
+
+Choose a TBT template, enter a new permit number, and click **Save permit number**. The number is selected immediately and stays available after reloading or closing the browser. Each template has its own saved list. Choose a saved number before generating the PDF. The selected number appears on every PDF page and in its download filename.
+
+Click **Delete selected permit number** to remove it from the current template's list. If the list becomes empty, add a number before generating another PDF. Starting a new TBT keeps the selected number.
+
+Storage is local to the browser and website address; clearing browser data removes saved numbers. Export and import backups to preserve or transfer them. Backups from earlier versions are supported.
+
+The supplied QR codes belong to the original permits. When another number is selected, the old QR code is removed. Adding a number does not create a new permit QR code or change the template's approved work scope.
